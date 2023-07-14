@@ -1,0 +1,10 @@
+{
+  "extends": "@tsconfig/react-native/tsconfig.json",
+  "compilerOptions": {
+    "lib": [
+      "ES7",
+      "dom"
+    ],
+    "resolveJsonModule": true
+  }
+}
