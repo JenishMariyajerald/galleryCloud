@@ -33,9 +33,11 @@ const {useQuery, useRealm} = realmContext;
 
 const Gallery: React.FC<MainScreenProps> = () => {
   const [progress, setProgress] = useState<number>();
-  const [currentUploadingUri, setCurrentUploadingUri] = useState<string>();
+  const [currentUploadingUri, setCurrentUploadingUri] = useState<string[]>([]);
   const [imagesList, setImagesList] = useState<string[]>([]);
   const [isModalVisible, setModalVisible] = useState(false);
+  const [inputValue, setInputValue] = useState<string>('');
+
   const realm = useRealm();
   let data = useQuery<TestRealm>(TestRealm);
 
@@ -129,7 +131,9 @@ const Gallery: React.FC<MainScreenProps> = () => {
     imageListCopy.push(uri);
     console.log('ImageList', imageListCopy);
     setImagesList(imageListCopy);
-    setCurrentUploadingUri(uri);
+    const unUpload = [...currentUploadingUri];
+    unUpload.push(uri);
+    setCurrentUploadingUri(unUpload);
     task.on('state_changed', taskSnapshot => {
       const percentage =
         taskSnapshot.bytesTransferred / taskSnapshot.totalBytes;
@@ -139,6 +143,7 @@ const Gallery: React.FC<MainScreenProps> = () => {
     task.then(() => {
       if (data.length) {
         DeleteObjectFormRealm(uri);
+        setCurrentUploadingUri([]);
       }
       console.log('Image uploaded to the bucket!');
     });
@@ -165,6 +170,9 @@ const Gallery: React.FC<MainScreenProps> = () => {
   };
 
   const renderItem = ({item}: {item: any}) => {
+    const isUploadedToFirebase = imagesList.includes(item);
+    const isUploading = currentUploadingUri.includes(item);
+
     return (
       <View style={styles.imageContainer}>
         <Image
@@ -173,21 +181,22 @@ const Gallery: React.FC<MainScreenProps> = () => {
             uri: item,
           }}
         />
-        {currentUploadingUri === item && progress !== 1 && (
+        {isUploadedToFirebase && isUploading && (
           <View style={styles.crossMark}>
             <Image
               style={[styles.crossImage]}
-              source={require('../../assests/disabled.png')} // Replace with the path to your cross image
+              source={require('../../assests/disabled.png')}
             />
           </View>
         )}
 
-        {currentUploadingUri === item && progress !== 1 && (
+        {isUploading && (
           <ProgressView
-            style={{height: 80}}
-            progressTintColor="orange"
-            trackTintColor="white"
+            style={{height: 40}}
+            progressTintColor="green"
+            trackTintColor="black"
             progress={progress}
+            progressViewStyle="bar"
           />
         )}
       </View>
@@ -196,16 +205,17 @@ const Gallery: React.FC<MainScreenProps> = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.searchBarContainer}>
-        <TouchableOpacity style={styles.inputContainer}>
-          <TextInput placeholder="Search image" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.searchTextContainer} onPress={() => {}}>
-          <Text style={styles.searchText}>Search</Text>
+      <View style={styles.inputView}>
+        <TextInput
+          value={inputValue}
+          onChangeText={val => setInputValue(val)}
+          style={styles.input}
+          placeholder="Search Images"
+        />
+        <TouchableOpacity>
+          <Text style={styles.searchButton}>Search</Text>
         </TouchableOpacity>
       </View>
-
       <View style={styles.listContainer}>
         <FlatList
           numColumns={3}
@@ -242,25 +252,27 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'black',
+    backgroundColor: 'white',
   },
   listContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
   },
-  searchBarContainer: {
-    margin: 10,
+  inputView: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 10,
+    marginTop: 20,
   },
-  inputContainer: {
-    flex: 1,
-    borderWidth: 1,
+  input: {
+    fontSize: 20,
     borderColor: 'gray',
-    borderRadius: 50,
-    marginHorizontal: 10,
+    backgroundColor: '#EEEEEE',
+    height: 40,
+    borderWidth: 0.5,
+    borderRadius: 12,
+    flexGrow: 1,
+    padding: 10,
   },
   crossMark: {
     position: 'absolute',
@@ -288,36 +300,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 40,
   },
-
-  searchTextContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  searchButton: {
+    color: 'black',
+    padding: 12,
   },
   buttonText: {
     color: 'white',
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    width: '80%',
-    alignItems: 'center',
-  },
-  modalItem: {
-    padding: 15,
-  },
-  modalText: {
-    color: 'black',
-  },
-  modalSeparator: {
-    backgroundColor: 'grey',
-    borderWidth: 0.5,
-    width: '100%',
   },
   imageContainer: {
     margin: 7,
@@ -325,9 +313,6 @@ const styles = StyleSheet.create({
   image: {
     width: (Dimensions.get('window').width - 50) / 3,
     height: (Dimensions.get('window').width - 50) / 3,
-  },
-  searchText: {
-    color: 'white',
   },
 });
 
