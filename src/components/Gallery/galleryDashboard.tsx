@@ -19,6 +19,7 @@ import {
   launchImageLibrary,
   ImagePickerResponse,
   Asset,
+  PhotoQuality,
 } from 'react-native-image-picker';
 
 import storage from '@react-native-firebase/storage';
@@ -26,13 +27,16 @@ import {realmContext, TestRealm} from '../../realm';
 import {ProgressView} from '@react-native-community/progress-view';
 import NetInfo from '@react-native-community/netinfo';
 import CustomDialog from '../Dialog/dialog';
-
+import moment from 'moment';
 interface MainScreenProps {}
+interface ProgressState {
+  [key: string]: number;
+}
 
 const {useQuery, useRealm} = realmContext;
 
 const Gallery: React.FC<MainScreenProps> = () => {
-  const [progress, setProgress] = useState<number>();
+  const [progress, setProgress] = useState<ProgressState>({});
   const [currentUploadingUri, setCurrentUploadingUri] = useState<string[]>([]);
   const [imagesList, setImagesList] = useState<string[]>([]);
   const [isModalVisible, setModalVisible] = useState(false);
@@ -42,26 +46,31 @@ const Gallery: React.FC<MainScreenProps> = () => {
   let data = useQuery<TestRealm>(TestRealm);
 
   useEffect(() => {
-    fetchImagesFromStorage();
-    const unsubscribe = NetInfo.addEventListener(state => {
+    getImageFromFirebaseStorage();
+    const checkInternetConnection = NetInfo.addEventListener(state => {
       if (state.isConnected) {
-        console.log('Calleddd', JSON.stringify(state));
+        console.log('Internet is connected', JSON.stringify(state));
         data.map(async item => {
-          await handleImageWithiFirebaseStorage(item.url);
+          await uploadToFirebase(item.url);
         });
       }
     });
 
     return () => {
-      unsubscribe();
+      checkInternetConnection();
     };
   }, []);
 
   const toggleModal = () => {
     setModalVisible(!isModalVisible);
   };
+  const cameraOptions = {
+    mediaType: 'photo' as const,
+    quality: 0.5 as PhotoQuality | undefined,
+    cameraType: 'front' as const,
+  };
   const openCamera = () => {
-    launchCamera({mediaType: 'photo'}, (res: ImagePickerResponse) => {
+    launchCamera(cameraOptions, (res: ImagePickerResponse) => {
       if (res.assets) {
         console.log('CaptureRes:', JSON.stringify(res.assets[0].uri));
         const image = res.assets[0];
@@ -90,8 +99,7 @@ const Gallery: React.FC<MainScreenProps> = () => {
     });
   };
 
-  const handleImageWithRealm = (image: Asset) => {
-    console.log('Selected image URI: ', image.uri);
+  const uploadToRealm = (image: Asset) => {
     realm.write(() => {
       realm.create('TestRealm', {
         _id: new Realm.BSON.ObjectID(),
@@ -110,14 +118,15 @@ const Gallery: React.FC<MainScreenProps> = () => {
     if (deleteIndex >= 0) {
       realm.write(() => {
         realm.delete(data[deleteIndex]);
-        fetchImagesFromStorage();
+        getImageFromFirebaseStorage();
       });
     }
   };
 
-  const handleImageWithiFirebaseStorage = (uri: any) => {
-    fetchImagesFromStorage();
-    const filename = uri?.substring(uri.lastIndexOf('/') + 1);
+  const uploadToFirebase = (uri: any) => {
+    getImageFromFirebaseStorage();
+    const timestamp = moment().format('YYYYMMDDHHmmssSSS');
+    const filename = `IMG${timestamp}`;
     let pathToFile;
     if (Platform.OS === 'android') {
       pathToFile = uri;
@@ -129,17 +138,19 @@ const Gallery: React.FC<MainScreenProps> = () => {
     const task = storageRef.putFile(pathToFile);
     const imageListCopy = [...imagesList];
     imageListCopy.push(uri);
-    console.log('ImageList', imageListCopy);
     setImagesList(imageListCopy);
     const unUpload = [...currentUploadingUri];
     unUpload.push(uri);
     setCurrentUploadingUri(unUpload);
+
     task.on('state_changed', taskSnapshot => {
       const percentage =
         taskSnapshot.bytesTransferred / taskSnapshot.totalBytes;
-      setProgress(percentage);
+      setProgress(prevProgress => ({
+        ...prevProgress,
+        [uri]: percentage,
+      }));
     });
-
     task.then(() => {
       if (data.length) {
         DeleteObjectFormRealm(uri);
@@ -150,10 +161,10 @@ const Gallery: React.FC<MainScreenProps> = () => {
   };
 
   const uploadImage = async (image: Asset) => {
-    handleImageWithRealm(image);
-    handleImageWithiFirebaseStorage(image.uri);
+    uploadToFirebase(image.uri);
+    uploadToRealm(image);
   };
-  const fetchImagesFromStorage = async () => {
+  const getImageFromFirebaseStorage = async () => {
     const imageRefs = await storage().ref().child('images/').listAll();
     console.log('imageRefs', imageRefs);
     const urls = await Promise.all(
@@ -165,13 +176,14 @@ const Gallery: React.FC<MainScreenProps> = () => {
     const localUrls = data.map(i => {
       return i.url;
     });
-    const finalUrls = [...localUrls, ...urls];
+    const finalUrls = [...urls, ...localUrls];
     setImagesList(finalUrls);
   };
 
   const renderItem = ({item}: {item: any}) => {
     const isUploadedToFirebase = imagesList.includes(item);
     const isUploading = currentUploadingUri.includes(item);
+    const uploadProgress = progress && progress[item];
 
     return (
       <View style={styles.imageContainer}>
@@ -189,15 +201,17 @@ const Gallery: React.FC<MainScreenProps> = () => {
             />
           </View>
         )}
-
-        {isUploading && (
-          <ProgressView
-            style={{height: 40}}
-            progressTintColor="green"
-            trackTintColor="black"
-            progress={progress}
-            progressViewStyle="bar"
-          />
+        {isUploading && uploadProgress !== undefined && (
+          <View>
+            <ProgressView
+              style={{height: 40}}
+              progressTintColor="green"
+              trackTintColor="black"
+              progress={uploadProgress}
+              progressViewStyle="bar"
+            />
+            <Text>{`${Math.round(uploadProgress * 100)}%`}</Text>
+          </View>
         )}
       </View>
     );
@@ -289,7 +303,7 @@ const styles = StyleSheet.create({
   crossImage: {
     width: 14,
     height: 14,
-    tintColor: 'red', // Customize the color of the cross image if needed
+    tintColor: 'red',
   },
   buttonContainer: {
     padding: 10,
