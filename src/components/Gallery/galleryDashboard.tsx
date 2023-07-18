@@ -28,6 +28,7 @@ import {ProgressView} from '@react-native-community/progress-view';
 import NetInfo from '@react-native-community/netinfo';
 import CustomDialog from '../Dialog/dialog';
 import moment from 'moment';
+
 interface MainScreenProps {}
 interface ProgressState {
   [key: string]: number;
@@ -41,6 +42,8 @@ const Gallery: React.FC<MainScreenProps> = () => {
   const [imagesList, setImagesList] = useState<string[]>([]);
   const [isModalVisible, setModalVisible] = useState(false);
   const [inputValue, setInputValue] = useState<string>('');
+  const [filteredData, setFilteredData] = useState<string[]>([]);
+  const [isSearchFocused, setSearchFocused] = useState<boolean>(false);
 
   const realm = useRealm();
   let data = useQuery<TestRealm>(TestRealm);
@@ -60,15 +63,31 @@ const Gallery: React.FC<MainScreenProps> = () => {
       checkInternetConnection();
     };
   }, []);
+  const handleInputFocus = () => {
+    setSearchFocused(true);
+  };
 
+  const handleInputBlur = () => {
+    setSearchFocused(false);
+  };
   const toggleModal = () => {
     setModalVisible(!isModalVisible);
   };
+
+  const handleInputChange = (value: string) => {
+    setInputValue(value);
+    const filtered = imagesList.filter(item =>
+      item.toLowerCase().includes(value.toLowerCase()),
+    );
+    setFilteredData(filtered);
+  };
+
   const cameraOptions = {
     mediaType: 'photo' as const,
     quality: 0.5 as PhotoQuality | undefined,
     cameraType: 'front' as const,
   };
+
   const openCamera = () => {
     launchCamera(cameraOptions, (res: ImagePickerResponse) => {
       if (res.assets) {
@@ -151,6 +170,7 @@ const Gallery: React.FC<MainScreenProps> = () => {
         [uri]: percentage,
       }));
     });
+
     task.then(() => {
       if (data.length) {
         DeleteObjectFormRealm(uri);
@@ -164,6 +184,7 @@ const Gallery: React.FC<MainScreenProps> = () => {
     uploadToFirebase(image.uri);
     uploadToRealm(image);
   };
+
   const getImageFromFirebaseStorage = async () => {
     const imageRefs = await storage().ref().child('images/').listAll();
     console.log('imageRefs', imageRefs);
@@ -178,6 +199,7 @@ const Gallery: React.FC<MainScreenProps> = () => {
     });
     const finalUrls = [...urls, ...localUrls];
     setImagesList(finalUrls);
+    setFilteredData(finalUrls);
   };
 
   const renderItem = ({item}: {item: any}) => {
@@ -195,10 +217,12 @@ const Gallery: React.FC<MainScreenProps> = () => {
         />
         {isUploadedToFirebase && isUploading && (
           <View style={styles.crossMark}>
-            <Image
-              style={[styles.crossImage]}
-              source={require('../../assests/disabled.png')}
-            />
+            <TouchableOpacity>
+              <Image
+                style={[styles.crossImage]}
+                source={require('../../assests/disabled.png')}
+              />
+            </TouchableOpacity>
           </View>
         )}
         {isUploading && uploadProgress !== undefined && (
@@ -222,30 +246,38 @@ const Gallery: React.FC<MainScreenProps> = () => {
       <View style={styles.inputView}>
         <TextInput
           value={inputValue}
-          onChangeText={val => setInputValue(val)}
+          onChangeText={handleInputChange}
+          onFocus={handleInputFocus}
+          onBlur={handleInputBlur}
           style={styles.input}
           placeholder="Search Images"
         />
-        <TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => {
+            handleInputChange(inputValue);
+          }}>
           <Text style={styles.searchButton}>Search</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.listContainer}>
         <FlatList
           numColumns={3}
-          data={imagesList}
+          data={filteredData}
           renderItem={renderItem}
           keyExtractor={(item, index) => index.toString()}
         />
       </View>
 
-      <TouchableOpacity
-        onPress={() => {
-          setModalVisible(true);
-        }}
-        style={styles.buttonContainer}>
-        <Text style={styles.buttonText}>Upload</Text>
-      </TouchableOpacity>
+      {!isSearchFocused && (
+        <TouchableOpacity
+          onPress={() => {
+            setModalVisible(true);
+          }}
+          style={styles.buttonContainer}>
+          <Text style={styles.buttonText}>Upload</Text>
+        </TouchableOpacity>
+      )}
+
       <CustomDialog
         title="Choose an Option"
         visible={isModalVisible}
