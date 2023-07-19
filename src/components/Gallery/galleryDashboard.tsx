@@ -129,13 +129,11 @@ const Gallery: React.FC<MainScreenProps> = () => {
     if (deleteIndex >= 0) {
       realm.write(() => {
         realm.delete(data[deleteIndex]);
-        getImageFromFirebaseStorage();
       });
     }
   };
 
   const uploadToFirebase = (uri: any) => {
-    getImageFromFirebaseStorage();
     const timestamp = moment().format('YYYYMMDDHHmmssSSS');
     const filename = `IMG${timestamp}`;
     let pathToFile;
@@ -147,9 +145,11 @@ const Gallery: React.FC<MainScreenProps> = () => {
 
     const storageRef = storage().ref('images').child(filename);
     const task = storageRef.putFile(pathToFile);
+
     const imageListCopy = [...imagesList];
     imageListCopy.push(uri);
     setImagesList(imageListCopy);
+    setFilteredData(imageListCopy);
     const unUpload = [...currentUploadingUri];
     unUpload.push(uri);
     setCurrentUploadingUri(unUpload);
@@ -173,13 +173,12 @@ const Gallery: React.FC<MainScreenProps> = () => {
   };
 
   const uploadImage = async (image: Asset) => {
-    uploadToFirebase(image.uri);
     uploadToRealm(image);
+    uploadToFirebase(image.uri);
   };
 
   const getImageFromFirebaseStorage = async () => {
     const imageRefs = await storage().ref().child('images/').listAll();
-    console.log('imageRefs', imageRefs);
     const urls = await Promise.all(
       imageRefs.items.map(ref => {
         return ref.getDownloadURL();
@@ -194,10 +193,9 @@ const Gallery: React.FC<MainScreenProps> = () => {
     setFilteredData(finalUrls);
   };
 
-  const renderItem = ({item}: {item: any}) => {
+  const renderItem = ({item}: {item: string}) => {
     const isUploadedToFirebase = imagesList.includes(item);
-    const isUploading = currentUploadingUri.includes(item);
-    const uploadProgress = progress && progress[item];
+    const uploadProgress = progress[item];
 
     return (
       <View style={styles.imageContainer}>
@@ -207,17 +205,19 @@ const Gallery: React.FC<MainScreenProps> = () => {
             uri: item,
           }}
         />
-        {isUploadedToFirebase && isUploading && (
-          <View style={styles.crossMark}>
-            <TouchableOpacity>
-              <Image
-                style={[styles.crossImage]}
-                source={require('../../assests/disabled.png')}
-              />
-            </TouchableOpacity>
-          </View>
-        )}
-        {isUploading && uploadProgress !== undefined && (
+        {isUploadedToFirebase &&
+          uploadProgress !== undefined &&
+          uploadProgress < 1 && (
+            <View style={styles.crossMark}>
+              <TouchableOpacity>
+                <Image
+                  style={[styles.crossImage]}
+                  source={require('../../assests/disabled.png')}
+                />
+              </TouchableOpacity>
+            </View>
+          )}
+        {uploadProgress !== undefined && uploadProgress < 1 && (
           <ProgressBar uploadProgress={uploadProgress} />
         )}
       </View>
