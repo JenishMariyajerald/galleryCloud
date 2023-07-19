@@ -19,15 +19,13 @@ import {
   launchImageLibrary,
   ImagePickerResponse,
   Asset,
-  PhotoQuality,
 } from 'react-native-image-picker';
-
 import storage from '@react-native-firebase/storage';
-import {realmContext, TestRealm} from '../../realm';
-import {ProgressView} from '@react-native-community/progress-view';
 import NetInfo from '@react-native-community/netinfo';
-import CustomDialog from '../Dialog/dialog';
 import moment from 'moment';
+import {realmContext, TestRealm} from '../../realm';
+import {ProgressBar, cameraOptions} from './utils';
+import CustomDialog from '../Dialog/dialog';
 
 interface MainScreenProps {}
 interface ProgressState {
@@ -80,12 +78,6 @@ const Gallery: React.FC<MainScreenProps> = () => {
       item.toLowerCase().includes(value.toLowerCase()),
     );
     setFilteredData(filtered);
-  };
-
-  const cameraOptions = {
-    mediaType: 'photo' as const,
-    quality: 0.5 as PhotoQuality | undefined,
-    cameraType: 'front' as const,
   };
 
   const openCamera = () => {
@@ -226,16 +218,7 @@ const Gallery: React.FC<MainScreenProps> = () => {
           </View>
         )}
         {isUploading && uploadProgress !== undefined && (
-          <View>
-            <ProgressView
-              style={{height: 40}}
-              progressTintColor="green"
-              trackTintColor="black"
-              progress={uploadProgress}
-              progressViewStyle="bar"
-            />
-            <Text>{`${Math.round(uploadProgress * 100)}%`}</Text>
-          </View>
+          <ProgressBar uploadProgress={uploadProgress} />
         )}
       </View>
     );
