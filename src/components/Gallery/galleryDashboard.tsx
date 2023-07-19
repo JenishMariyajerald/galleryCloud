@@ -42,7 +42,10 @@ const Gallery: React.FC<MainScreenProps> = () => {
   const [inputValue, setInputValue] = useState<string>('');
   const [filteredData, setFilteredData] = useState<string[]>([]);
   const [isSearchFocused, setSearchFocused] = useState<boolean>(false);
-
+  const [uploadTask, setUploadTask] = useState<any>();
+  const [progressModalVisible, setProgressModalVisible] =
+    useState<boolean>(false);
+  const [pause, setPause] = useState<boolean>(false);
   const realm = useRealm();
   let data = useQuery<TestRealm>(TestRealm);
 
@@ -83,7 +86,6 @@ const Gallery: React.FC<MainScreenProps> = () => {
   const openCamera = () => {
     launchCamera(cameraOptions, (res: ImagePickerResponse) => {
       if (res.assets) {
-        console.log('CaptureRes:', JSON.stringify(res.assets[0].uri));
         const image = res.assets[0];
         uploadImage(image);
         toggleModal();
@@ -97,7 +99,6 @@ const Gallery: React.FC<MainScreenProps> = () => {
 
   const openGallery = () => {
     launchImageLibrary({mediaType: 'photo'}, (res: ImagePickerResponse) => {
-      console.log('PickingPictureFailureRes:', JSON.stringify(res));
       if (res.assets) {
         const image = res.assets[0];
         uploadImage(image);
@@ -145,7 +146,7 @@ const Gallery: React.FC<MainScreenProps> = () => {
 
     const storageRef = storage().ref('images').child(filename);
     const task = storageRef.putFile(pathToFile);
-
+    setUploadTask(task);
     const imageListCopy = [...imagesList];
     imageListCopy.push(uri);
     setImagesList(imageListCopy);
@@ -192,7 +193,16 @@ const Gallery: React.FC<MainScreenProps> = () => {
     setImagesList(finalUrls);
     setFilteredData(finalUrls);
   };
+  const pauseUpload = () => {
+    uploadTask.pause();
+    setPause(true);
+  };
+  const resumeUpload = () => {
+    setProgressModalVisible(false);
+    uploadTask.resume();
 
+    setPause(false);
+  };
   const renderItem = ({item}: {item: string}) => {
     const isUploadedToFirebase = imagesList.includes(item);
     const uploadProgress = progress[item];
@@ -209,10 +219,22 @@ const Gallery: React.FC<MainScreenProps> = () => {
           uploadProgress !== undefined &&
           uploadProgress < 1 && (
             <View style={styles.crossMark}>
-              <TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  if (!pause) {
+                    pauseUpload();
+                  }
+                  if (pause) {
+                    setProgressModalVisible(true);
+                  }
+                }}>
                 <Image
                   style={[styles.crossImage]}
-                  source={require('../../assests/disabled.png')}
+                  source={
+                    pause
+                      ? require('../../assests/play.png')
+                      : require('../../assests/pause.png')
+                  }
                 />
               </TouchableOpacity>
             </View>
@@ -262,6 +284,7 @@ const Gallery: React.FC<MainScreenProps> = () => {
       )}
 
       <CustomDialog
+        mode="selection"
         title="Choose an Option"
         visible={isModalVisible}
         onClose={() => toggleModal()}
@@ -271,6 +294,16 @@ const Gallery: React.FC<MainScreenProps> = () => {
         onLibrarySelect={() => {
           openGallery();
         }}
+      />
+      <CustomDialog
+        mode="upload"
+        title="Are you sure want to"
+        visible={progressModalVisible}
+        onClose={() => setProgressModalVisible(false)}
+        onResumeSelect={() => {
+          resumeUpload();
+        }}
+        onCancelSelect={() => setProgressModalVisible(false)}
       />
     </SafeAreaView>
   );
@@ -312,13 +345,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 10,
-    borderColor: 'red',
+    backgroundColor: 'black',
     borderWidth: 1,
   },
   crossImage: {
     width: 14,
     height: 14,
-    tintColor: 'red',
+    tintColor: 'white',
   },
   buttonContainer: {
     padding: 10,

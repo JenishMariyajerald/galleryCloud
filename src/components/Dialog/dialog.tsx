@@ -14,6 +14,9 @@ interface CustomDialogProps {
   title?: string;
   onCameraSelect?: () => void;
   onLibrarySelect?: () => void;
+  onResumeSelect?: () => void;
+  onCancelSelect?: () => void;
+  mode?: 'selection' | 'upload';
 }
 
 const CustomDialog: React.FC<CustomDialogProps> = ({
@@ -22,17 +25,14 @@ const CustomDialog: React.FC<CustomDialogProps> = ({
   onClose,
   onCameraSelect,
   onLibrarySelect,
+  onResumeSelect,
+  onCancelSelect,
+  mode,
 }) => {
   return (
     <Modal visible={visible}>
       <View style={styles.container}>
-        <View
-          style={[
-            styles.dialog,
-            {
-              backgroundColor: 'white',
-            },
-          ]}>
+        <View style={[styles.dialog, styles.white]}>
           <View style={styles.titleView}>
             <Text style={[styles.title]}>{title}</Text>
             <TouchableOpacity onPress={onClose}>
@@ -42,17 +42,32 @@ const CustomDialog: React.FC<CustomDialogProps> = ({
               />
             </TouchableOpacity>
           </View>
-          <View style={{flexDirection: 'column'}}>
-            <TouchableOpacity onPress={onCameraSelect}>
-              <Text style={{padding: 10}}>Select Camera</Text>
-            </TouchableOpacity>
-            <View
-              style={{height: 1, backgroundColor: 'black', width: '100%'}}
-            />
-            <TouchableOpacity onPress={onLibrarySelect}>
-              <Text style={{padding: 10}}>Select from library</Text>
-            </TouchableOpacity>
-          </View>
+          {mode === 'upload' && (
+            <View style={styles.buttonView}>
+              <TouchableOpacity
+                onPress={onResumeSelect}
+                style={styles.buttonContainer}>
+                <Text style={styles.buttonTitle}>Resume</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={onCancelSelect}
+                style={styles.buttonContainer}>
+                <Text style={styles.buttonTitle}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {mode === 'selection' && (
+            <View style={styles.selectionView}>
+              <TouchableOpacity onPress={onCameraSelect}>
+                <Text style={styles.selectionPadding}>Select Camera</Text>
+              </TouchableOpacity>
+              <View style={styles.divider} />
+              <TouchableOpacity onPress={onLibrarySelect}>
+                <Text style={styles.selectionPadding}>Select from library</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -85,5 +100,34 @@ const styles = StyleSheet.create({
   closeIcon: {
     width: 24,
     height: 24,
+  },
+  buttonContainer: {
+    backgroundColor: 'green',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    width: 80,
+    height: 30,
+  },
+  buttonTitle: {
+    color: 'white',
+  },
+  buttonView: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'black',
+    width: '100%',
+  },
+  selectionView: {
+    flexDirection: 'column',
+  },
+  selectionPadding: {
+    padding: 10,
+  },
+  white: {
+    backgroundColor: 'white',
   },
 });
