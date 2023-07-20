@@ -46,6 +46,8 @@ const Gallery: React.FC<MainScreenProps> = () => {
   const [progressModalVisible, setProgressModalVisible] =
     useState<boolean>(false);
   const [pause, setPause] = useState<boolean>(false);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+
   const realm = useRealm();
   let data = useQuery<TestRealm>(TestRealm);
 
@@ -193,17 +195,19 @@ const Gallery: React.FC<MainScreenProps> = () => {
     setImagesList(finalUrls);
     setFilteredData(finalUrls);
   };
-  const pauseUpload = () => {
+  const pauseUpload = (index: number) => {
+    console.log('index', index);
     uploadTask.pause();
     setPause(true);
+    setSelectedIndex(index);
   };
   const resumeUpload = () => {
+    setPause(false);
+
     setProgressModalVisible(false);
     uploadTask.resume();
-
-    setPause(false);
   };
-  const renderItem = ({item}: {item: string}) => {
+  const renderItem = ({item, index}: {item: string; index: number}) => {
     const isUploadedToFirebase = imagesList.includes(item);
     const uploadProgress = progress[item];
 
@@ -222,16 +226,15 @@ const Gallery: React.FC<MainScreenProps> = () => {
               <TouchableOpacity
                 onPress={() => {
                   if (!pause) {
-                    pauseUpload();
-                  }
-                  if (pause) {
+                    pauseUpload(index);
+                  } else {
                     setProgressModalVisible(true);
                   }
                 }}>
                 <Image
                   style={[styles.crossImage]}
                   source={
-                    pause
+                    index === selectedIndex && pause
                       ? require('../../assests/play.png')
                       : require('../../assests/pause.png')
                   }
