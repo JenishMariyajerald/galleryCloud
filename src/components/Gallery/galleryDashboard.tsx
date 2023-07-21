@@ -244,6 +244,26 @@ const Gallery: React.FC<MainScreenProps> = () => {
             uri: item,
           }}
         />
+        {data.length > 0 && (
+          <View style={styles.crossMark}>
+            <TouchableOpacity
+              onPressIn={() => {
+                const deleteIndex = data.findIndex(i => {
+                  return i.url === item;
+                });
+
+                realm.write(() => {
+                  realm.delete(data[deleteIndex]);
+                });
+                realmData.splice(deleteIndex, 1);
+              }}>
+              <Image
+                style={[styles.crossImage]}
+                source={require('../../assests/disabled.png')}
+              />
+            </TouchableOpacity>
+          </View>
+        )}
         {uploadProgress !== undefined && uploadProgress < 1 && (
           <View style={styles.crossMark}>
             <TouchableOpacity
