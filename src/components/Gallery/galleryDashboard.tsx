@@ -42,23 +42,31 @@ const Gallery: React.FC<MainScreenProps> = () => {
   const [inputValue, setInputValue] = useState<string>('');
   const [filteredData, setFilteredData] = useState<string[]>([]);
   const [isSearchFocused, setSearchFocused] = useState<boolean>(false);
+  const [realmData, setRealmData] = useState<string[]>([]);
   const [uploadTask, setUploadTask] = useState<any>();
+  const initialUploadRef = React.useRef<boolean>(true);
+
   const [progressModalVisible, setProgressModalVisible] =
     useState<boolean>(false);
   const [pause, setPause] = useState<boolean>(false);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-
+  const [internetActive, setInternetActive] = useState<boolean>(false);
   const realm = useRealm();
   let data = useQuery<TestRealm>(TestRealm);
 
   useEffect(() => {
     getImageFromFirebaseStorage();
+    const RealmValue = data.map(i => {
+      return i.url;
+    });
+    setRealmData(RealmValue);
     const checkInternetConnection = NetInfo.addEventListener(state => {
       if (state.isConnected) {
-        console.log('Internet is connected', JSON.stringify(state));
-        data.map(async item => {
-          await uploadToFirebase(item.url);
-        });
+        if (state.isInternetReachable) {
+          setInternetActive(true);
+        } else {
+          setInternetActive(false);
+        }
       }
     });
 
@@ -66,6 +74,16 @@ const Gallery: React.FC<MainScreenProps> = () => {
       checkInternetConnection();
     };
   }, []);
+
+  useEffect(() => {
+    // Upload images from Realm data if internet is active
+    if (internetActive) {
+      data.map(async item => {
+        await uploadToFirebase(item.url);
+      });
+    }
+  }, [internetActive]);
+  console.log('Active', internetActive);
   const handleInputFocus = () => {
     setSearchFocused(true);
   };
@@ -123,17 +141,10 @@ const Gallery: React.FC<MainScreenProps> = () => {
         createdAt: new Date(),
       });
     });
-  };
-
-  const DeleteObjectFormRealm = (url: string) => {
-    const deleteIndex = data.findIndex(item => {
-      return item.url === url;
+    const RealmValue = data.map(i => {
+      return i.url;
     });
-    if (deleteIndex >= 0) {
-      realm.write(() => {
-        realm.delete(data[deleteIndex]);
-      });
-    }
+    setRealmData(RealmValue);
   };
 
   const uploadToFirebase = (uri: any) => {
@@ -149,10 +160,13 @@ const Gallery: React.FC<MainScreenProps> = () => {
     const storageRef = storage().ref('images').child(filename);
     const task = storageRef.putFile(pathToFile);
     setUploadTask(task);
-    const imageListCopy = [...imagesList];
-    imageListCopy.push(uri);
-    setImagesList(imageListCopy);
-    setFilteredData(imageListCopy);
+    // const imageListCopy = [...imagesList];
+    // imageListCopy.push(uri);
+    // const filteredDataCopy = [...filteredData];
+    // filteredDataCopy.push(uri);
+    filteredData.push(uri);
+    // setImagesList(filteredDataCopy);
+    // setFilteredData(filteredDataCopy);
     const unUpload = [...currentUploadingUri];
     unUpload.push(uri);
     setCurrentUploadingUri(unUpload);
@@ -167,17 +181,27 @@ const Gallery: React.FC<MainScreenProps> = () => {
     });
 
     task.then(() => {
-      if (data.length) {
-        DeleteObjectFormRealm(uri);
-        setCurrentUploadingUri([]);
-      }
+      // DeleteObjectFormRealm(uri);
+      const deleteIndex = data.findIndex(item => {
+        return item.url === uri;
+      });
+
+      realm.write(() => {
+        realm.delete(data[deleteIndex]);
+      });
+      // setCurrentUploadingUri([]);
       console.log('Image uploaded to the bucket!');
     });
   };
 
   const uploadImage = async (image: Asset) => {
-    uploadToRealm(image);
-    uploadToFirebase(image.uri);
+    console.log('InternetConnectionStatus', internetActive);
+    if (internetActive) {
+      // uploadToRealm(image);
+      uploadToFirebase(image.uri);
+    } else {
+      uploadToRealm(image);
+    }
   };
 
   const getImageFromFirebaseStorage = async () => {
@@ -191,9 +215,10 @@ const Gallery: React.FC<MainScreenProps> = () => {
     const localUrls = data.map(i => {
       return i.url;
     });
-    const finalUrls = [...urls, ...localUrls];
-    setImagesList(finalUrls);
-    setFilteredData(finalUrls);
+    setRealmData(localUrls);
+    // const finalUrls = [...urls, ...localUrls];
+    // setImagesList(finalUrls);
+    setFilteredData(urls);
   };
   const pauseUpload = (index: number) => {
     console.log('index', index);
@@ -219,29 +244,27 @@ const Gallery: React.FC<MainScreenProps> = () => {
             uri: item,
           }}
         />
-        {isUploadedToFirebase &&
-          uploadProgress !== undefined &&
-          uploadProgress < 1 && (
-            <View style={styles.crossMark}>
-              <TouchableOpacity
-                onPress={() => {
-                  if (!pause) {
-                    pauseUpload(index);
-                  } else {
-                    setProgressModalVisible(true);
-                  }
-                }}>
-                <Image
-                  style={[styles.crossImage]}
-                  source={
-                    index === selectedIndex && pause
-                      ? require('../../assests/play.png')
-                      : require('../../assests/pause.png')
-                  }
-                />
-              </TouchableOpacity>
-            </View>
-          )}
+        {uploadProgress !== undefined && uploadProgress < 1 && (
+          <View style={styles.crossMark}>
+            <TouchableOpacity
+              onPress={() => {
+                if (!pause) {
+                  pauseUpload(index);
+                } else {
+                  setProgressModalVisible(true);
+                }
+              }}>
+              <Image
+                style={[styles.crossImage]}
+                source={
+                  index === selectedIndex && pause
+                    ? require('../../assests/play.png')
+                    : require('../../assests/pause.png')
+                }
+              />
+            </TouchableOpacity>
+          </View>
+        )}
         {uploadProgress !== undefined && uploadProgress < 1 && (
           <ProgressBar uploadProgress={uploadProgress} />
         )}
@@ -270,7 +293,7 @@ const Gallery: React.FC<MainScreenProps> = () => {
       <View style={styles.listContainer}>
         <FlatList
           numColumns={3}
-          data={filteredData}
+          data={data.length === 0 ? filteredData : realmData}
           renderItem={renderItem}
           keyExtractor={(item, index) => index.toString()}
         />
