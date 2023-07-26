@@ -1,43 +1,3 @@
-// import Realm from 'realm';
-// import {createRealmContext} from '@realm/react';
-
-// export class TestRealm extends Realm.Object{
-
-//   _id! : Realm.BSON.ObjectId;
-//   description!: string;
-//   completed!: boolean;
-//   createdAt!: Date;
-
-// static schema = {
-//   name: 'TestRealm',
-//   properties: {
-//     _id: 'objectId',
-//     description:{type: 'string',default:"text"},
-//     completed: {type: 'bool',default: false},
-//     createdAt: 'date',
-//   },
-// };
-// }
-// export const realmContext = createRealmContext({
-//   schema: [TestRealm],
-//   onFirstOpen(realm) {
-//     realm.create("TestRealm",{
-//       _id: new Realm.BSON.ObjectId(),
-//       description: "Learn Realm React Native",
-//       completed: false,
-//       createdAt: new Date()
-//     }
-//     );
-//     realm.create("TestRealm",{
-//       _id: new Realm.BSON.ObjectId(),
-//       description: "Copy one",
-//       completed: false,
-//       createdAt: new Date()
-//     }
-//     )
-//   }
-// });
-
 import Realm from 'realm';
 import {createRealmContext} from '@realm/react';
 
@@ -47,6 +7,7 @@ export class TestRealm extends Realm.Object {
   public url!: string;
   completed!: boolean;
   createdAt!: Date;
+  isOnline!: boolean;
 
   static schema = {
     name: 'TestRealm',
@@ -56,7 +17,9 @@ export class TestRealm extends Realm.Object {
       url: 'string',
       completed: {type: 'bool', default: false},
       createdAt: 'date',
+      isOnline: {type: 'bool', default: false},
     },
+    primaryKey: '_id',
   };
 }
 export const realmContext = createRealmContext({

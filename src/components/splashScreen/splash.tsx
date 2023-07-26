@@ -23,7 +23,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({navigation}) => {
   return (
     <View style={styles.container}>
       <ImageBackground
-        source={require('../../assests/splash.jpg')}
+        source={require('../../assets/splash.jpg')}
         resizeMode="cover"
         style={styles.image}>
         <Text style={styles.text}>Gallery</Text>

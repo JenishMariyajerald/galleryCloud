@@ -36,54 +36,19 @@ const {useQuery, useRealm} = realmContext;
 
 const Gallery: React.FC<MainScreenProps> = () => {
   const [progress, setProgress] = useState<ProgressState>({});
-  const [currentUploadingUri, setCurrentUploadingUri] = useState<string[]>([]);
   const [imagesList, setImagesList] = useState<string[]>([]);
   const [isModalVisible, setModalVisible] = useState(false);
   const [inputValue, setInputValue] = useState<string>('');
-  const [filteredData, setFilteredData] = useState<string[]>([]);
   const [isSearchFocused, setSearchFocused] = useState<boolean>(false);
-  const [realmData, setRealmData] = useState<string[]>([]);
-  const [uploadTask, setUploadTask] = useState<any>();
-  const initialUploadRef = React.useRef<boolean>(true);
 
   const [progressModalVisible, setProgressModalVisible] =
     useState<boolean>(false);
-  const [pause, setPause] = useState<boolean>(false);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [internetActive, setInternetActive] = useState<boolean>(false);
+
   const realm = useRealm();
   let data = useQuery<TestRealm>(TestRealm);
 
-  useEffect(() => {
-    getImageFromFirebaseStorage();
-    const RealmValue = data.map(i => {
-      return i.url;
-    });
-    setRealmData(RealmValue);
-    const checkInternetConnection = NetInfo.addEventListener(state => {
-      if (state.isConnected) {
-        if (state.isInternetReachable) {
-          setInternetActive(true);
-        } else {
-          setInternetActive(false);
-        }
-      }
-    });
+  const realmData = React.useMemo(() => data, [data]);
 
-    return () => {
-      checkInternetConnection();
-    };
-  }, []);
-
-  useEffect(() => {
-    // Upload images from Realm data if internet is active
-    if (internetActive) {
-      data.map(async item => {
-        await uploadToFirebase(item.url);
-      });
-    }
-  }, [internetActive]);
-  console.log('Active', internetActive);
   const handleInputFocus = () => {
     setSearchFocused(true);
   };
@@ -100,8 +65,12 @@ const Gallery: React.FC<MainScreenProps> = () => {
     const filtered = imagesList.filter(item =>
       item.toLowerCase().includes(value.toLowerCase()),
     );
-    setFilteredData(filtered);
   };
+
+  const isNetOn = React.useMemo(async () => {
+    const netInfoState = await NetInfo.fetch();
+    return netInfoState.isConnected;
+  }, []);
 
   const openCamera = () => {
     launchCamera(cameraOptions, (res: ImagePickerResponse) => {
@@ -132,73 +101,60 @@ const Gallery: React.FC<MainScreenProps> = () => {
   };
 
   const uploadToRealm = (image: Asset) => {
+    const timestamp = moment().format('YYYYMMDDHHmmssSSS');
+    const filename = `IMG${timestamp}`;
     realm.write(() => {
       realm.create('TestRealm', {
         _id: new Realm.BSON.ObjectID(),
-        name: 'Example',
+        name: filename,
         url: image.uri,
         completed: true,
+        isOnline: false,
         createdAt: new Date(),
       });
     });
-    const RealmValue = data.map(i => {
-      return i.url;
-    });
-    setRealmData(RealmValue);
   };
 
-  const uploadToFirebase = (uri: any) => {
+  const onGalleryUploadPress = async (assetImage: any) => {
     const timestamp = moment().format('YYYYMMDDHHmmssSSS');
     const filename = `IMG${timestamp}`;
-    let pathToFile;
+    let pathToFile: any;
     if (Platform.OS === 'android') {
-      pathToFile = uri;
+      pathToFile = assetImage.uri;
     } else if (Platform.OS === 'ios') {
-      pathToFile = uri.replace('file://', '');
+      pathToFile = assetImage.uri.replace('file://', '');
     }
-
-    const storageRef = storage().ref('images').child(filename);
-    const task = storageRef.putFile(pathToFile);
-    setUploadTask(task);
-    // const imageListCopy = [...imagesList];
-    // imageListCopy.push(uri);
-    // const filteredDataCopy = [...filteredData];
-    // filteredDataCopy.push(uri);
-    filteredData.push(uri);
-    // setImagesList(filteredDataCopy);
-    // setFilteredData(filteredDataCopy);
-    const unUpload = [...currentUploadingUri];
-    unUpload.push(uri);
-    setCurrentUploadingUri(unUpload);
-
-    task.on('state_changed', taskSnapshot => {
-      const percentage =
-        taskSnapshot.bytesTransferred / taskSnapshot.totalBytes;
-      setProgress(prevProgress => ({
-        ...prevProgress,
-        [uri]: percentage,
-      }));
-    });
-
-    task.then(() => {
-      // DeleteObjectFormRealm(uri);
-      const deleteIndex = data.findIndex(item => {
-        return item.url === uri;
+    realm.write(() => {
+      realm.create('TestRealm', {
+        _id: new Realm.BSON.ObjectID(),
+        name: filename,
+        url: assetImage.uri,
+        isOnline: false,
+        completed: true,
+        createdAt: new Date(),
       });
-
-      realm.write(() => {
-        realm.delete(data[deleteIndex]);
+      const storageRef = storage().ref('images').child(filename);
+      const task = storageRef.putFile(pathToFile);
+      task.on('state_changed', taskSnapshot => {
+        const percentage = Math.round(
+          (100 * taskSnapshot.bytesTransferred) / taskSnapshot.totalBytes,
+        );
+        setProgress(prevState => ({...prevState, [pathToFile]: percentage}));
       });
-      // setCurrentUploadingUri([]);
-      console.log('Image uploaded to the bucket!');
+      task.then(() => {
+        let updt = realm.objects('TestRealm');
+        realm.write(() => {
+          const updateData: any = updt.find((k: any) => k.name === filename);
+          updateData.isOnline = true;
+        });
+      });
     });
   };
 
   const uploadImage = async (image: Asset) => {
-    console.log('InternetConnectionStatus', internetActive);
-    if (internetActive) {
-      // uploadToRealm(image);
-      uploadToFirebase(image.uri);
+    const isNext = await isNetOn;
+    if (isNext) {
+      onGalleryUploadPress(image);
     } else {
       uploadToRealm(image);
     }
@@ -206,87 +162,97 @@ const Gallery: React.FC<MainScreenProps> = () => {
 
   const getImageFromFirebaseStorage = async () => {
     const imageRefs = await storage().ref().child('images/').listAll();
-    const urls = await Promise.all(
+    const firbaseImage: any = await Promise.all(
       imageRefs.items.map(ref => {
-        return ref.getDownloadURL();
+        return ref.name;
       }),
     );
-
-    const localUrls = data.map(i => {
-      return i.url;
+    data.forEach((i: any) => {
+      const isExist = firbaseImage.find((k: any) => k === i.name);
+      if (isExist) {
+        realm.write(() => {
+          i.isOnline = true;
+        });
+      } else {
+        realm.write(() => {
+          let pathToFile: any;
+          if (Platform.OS === 'android') {
+            pathToFile = i.url;
+          } else if (Platform.OS === 'ios') {
+            pathToFile = i.url.replace('file://', '');
+          }
+          const storageRef = storage().ref('images').child(i.name);
+          const task = storageRef.putFile(pathToFile);
+          task.on('state_changed', taskSnapshot => {
+            const percentage = Math.round(
+              (100 * taskSnapshot.bytesTransferred) / taskSnapshot.totalBytes,
+            );
+            setProgress(prevState => ({
+              ...prevState,
+              [pathToFile]: percentage,
+            }));
+          });
+          task.then(() => {
+            realm.write(() => {
+              i.isOnline = true;
+            });
+          });
+        });
+      }
     });
-    setRealmData(localUrls);
-    // const finalUrls = [...urls, ...localUrls];
-    // setImagesList(finalUrls);
-    setFilteredData(urls);
   };
-  const pauseUpload = (index: number) => {
-    console.log('index', index);
-    uploadTask.pause();
-    setPause(true);
-    setSelectedIndex(index);
+  useEffect(() => {
+    getImageFromFirebaseStorage();
+  }, [isNetOn]);
+  const onDeletePress = async (realmDB: any) => {
+    let name = realmDB.name;
+    const isNet = await isNetOn;
+    if (isNet) {
+      realm.write(() => {
+        realm.delete(realmDB);
+      });
+      const imageRef = storage().ref(`images/${name}`);
+      imageRef
+        .delete()
+        .then(() => {
+          console.log('DELETED IN FIREBASE ==>');
+        })
+        .catch(error => {
+          console.log('Error deleting image: ====> \n\n', error);
+        });
+    } else {
+      realm.write(() => {
+        realm.delete(realmDB);
+      });
+    }
   };
-  const resumeUpload = () => {
-    setPause(false);
-
-    setProgressModalVisible(false);
-    uploadTask.resume();
-  };
-  const renderItem = ({item, index}: {item: string; index: number}) => {
-    const isUploadedToFirebase = imagesList.includes(item);
-    const uploadProgress = progress[item];
-
+  const renderItem = ({item}: {item: any}) => {
     return (
       <View style={styles.imageContainer}>
         <Image
           style={styles.image}
           source={{
-            uri: item,
+            uri: item.url,
           }}
         />
+        {progress[item.url] != undefined && progress[item.url] !== 100 && (
+          <Text>Uploaded {progress[item.url]}%</Text>
+        )}
+
+        <Text>{item.isOnline ? 'Online' : 'Offline'}</Text>
+
         {data.length > 0 && (
           <View style={styles.crossMark}>
             <TouchableOpacity
               onPressIn={() => {
-                const deleteIndex = data.findIndex(i => {
-                  return i.url === item;
-                });
-
-                realm.write(() => {
-                  realm.delete(data[deleteIndex]);
-                });
-                realmData.splice(deleteIndex, 1);
+                onDeletePress(item);
               }}>
               <Image
                 style={[styles.crossImage]}
-                source={require('../../assests/disabled.png')}
+                source={require('../../assets/disabled.png')}
               />
             </TouchableOpacity>
           </View>
-        )}
-        {uploadProgress !== undefined && uploadProgress < 1 && (
-          <View style={styles.crossMark}>
-            <TouchableOpacity
-              onPress={() => {
-                if (!pause) {
-                  pauseUpload(index);
-                } else {
-                  setProgressModalVisible(true);
-                }
-              }}>
-              <Image
-                style={[styles.crossImage]}
-                source={
-                  index === selectedIndex && pause
-                    ? require('../../assests/play.png')
-                    : require('../../assests/pause.png')
-                }
-              />
-            </TouchableOpacity>
-          </View>
-        )}
-        {uploadProgress !== undefined && uploadProgress < 1 && (
-          <ProgressBar uploadProgress={uploadProgress} />
         )}
       </View>
     );
@@ -313,7 +279,7 @@ const Gallery: React.FC<MainScreenProps> = () => {
       <View style={styles.listContainer}>
         <FlatList
           numColumns={3}
-          data={data.length === 0 ? filteredData : realmData}
+          data={realmData}
           renderItem={renderItem}
           keyExtractor={(item, index) => index.toString()}
         />
@@ -342,13 +308,10 @@ const Gallery: React.FC<MainScreenProps> = () => {
         }}
       />
       <CustomDialog
-        mode="upload"
+        mode="delete"
         title="Are you sure want to"
         visible={progressModalVisible}
         onClose={() => setProgressModalVisible(false)}
-        onResumeSelect={() => {
-          resumeUpload();
-        }}
         onCancelSelect={() => setProgressModalVisible(false)}
       />
     </SafeAreaView>

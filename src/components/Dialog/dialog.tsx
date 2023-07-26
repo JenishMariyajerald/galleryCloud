@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 
 interface CustomDialogProps {
@@ -14,9 +15,10 @@ interface CustomDialogProps {
   title?: string;
   onCameraSelect?: () => void;
   onLibrarySelect?: () => void;
-  onResumeSelect?: () => void;
+  onDelete?: () => void;
   onCancelSelect?: () => void;
-  mode?: 'selection' | 'upload';
+  mode?: 'selection' | 'delete';
+  loading?: boolean;
 }
 
 const CustomDialog: React.FC<CustomDialogProps> = ({
@@ -25,29 +27,34 @@ const CustomDialog: React.FC<CustomDialogProps> = ({
   onClose,
   onCameraSelect,
   onLibrarySelect,
-  onResumeSelect,
+  onDelete,
   onCancelSelect,
   mode,
+  loading,
 }) => {
   return (
     <Modal visible={visible}>
       <View style={styles.container}>
         <View style={[styles.dialog, styles.white]}>
-          <View style={styles.titleView}>
-            <Text style={[styles.title]}>{title}</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Image
-                source={require('../../assests/disabled.png')}
-                style={[styles.closeIcon]}
-              />
-            </TouchableOpacity>
-          </View>
-          {mode === 'upload' && (
+          {!loading && (
+            <View style={styles.titleView}>
+              <Text style={[styles.title]}>{title}</Text>
+              <TouchableOpacity onPress={onClose}>
+                <Image
+                  source={require('../../assets/disabled.png')}
+                  style={[styles.closeIcon]}
+                />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {mode === 'delete' && !loading ? (
             <View style={styles.buttonView}>
+              {loading}
               <TouchableOpacity
-                onPress={onResumeSelect}
+                onPress={onDelete}
                 style={styles.buttonContainer}>
-                <Text style={styles.buttonTitle}>Resume</Text>
+                <Text style={styles.buttonTitle}>Delete</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={onCancelSelect}
@@ -55,7 +62,9 @@ const CustomDialog: React.FC<CustomDialogProps> = ({
                 <Text style={styles.buttonTitle}>Cancel</Text>
               </TouchableOpacity>
             </View>
-          )}
+          ) : mode === 'delete' && loading ? (
+            <ActivityIndicator size="large" color="blue" />
+          ) : null}
 
           {mode === 'selection' && (
             <View style={styles.selectionView}>
