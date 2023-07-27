@@ -1,9 +1,8 @@
 import React from 'react';
-import {View, Text, Alert, ViewStyle, StyleSheet} from 'react-native';
+import {View, Text, Alert, StyleSheet} from 'react-native';
 import {ProgressView} from '@react-native-community/progress-view';
 import {PhotoQuality} from 'react-native-image-picker';
 import NetInfo from '@react-native-community/netinfo';
-import {styles} from './styles';
 
 interface ProgressBarProps {
   uploadProgress: number;
@@ -13,7 +12,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({uploadProgress}) => {
   return (
     <View>
       <ProgressView
-        style={{height: 20}}
+        style={styles.progress}
         progressTintColor="green"
         trackTintColor="black"
         progress={uploadProgress}
@@ -41,3 +40,9 @@ export const isNetOn = async () => {
   const netInfoState = await NetInfo.fetch();
   return netInfoState.isConnected;
 };
+
+const styles = StyleSheet.create({
+  progress: {
+    height: 20,
+  },
+});

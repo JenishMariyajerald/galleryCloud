@@ -25,7 +25,7 @@ import storage from '@react-native-firebase/storage';
 import NetInfo from '@react-native-community/netinfo';
 import moment from 'moment';
 import {realmContext, TestRealm} from '../../realm';
-import {ProgressBar, cameraOptions} from './utils';
+import {ProgressBar, cameraOptions, networkWarning} from './utils';
 import CustomDialog from '../Dialog/dialog';
 
 interface MainScreenProps {}
@@ -44,6 +44,7 @@ const Gallery: React.FC<MainScreenProps> = () => {
   const [selectedObject, SetSelectedObject] = useState<any>({});
   const [progressModalVisible, setProgressModalVisible] =
     useState<boolean>(false);
+  const [internetActive, setInternetActive] = useState<boolean>(false);
 
   const realm = useRealm();
   let data = useQuery<TestRealm>(TestRealm);
@@ -67,13 +68,6 @@ const Gallery: React.FC<MainScreenProps> = () => {
       item.toLowerCase().includes(value.toLowerCase()),
     );
   };
-
-  const isNetOn = React.useMemo(async () => {
-    const netInfoState = await NetInfo.fetch();
-    const internet =
-      netInfoState.isConnected && netInfoState.isInternetReachable;
-    return internet;
-  }, []);
 
   const openCamera = () => {
     launchCamera(cameraOptions, (res: ImagePickerResponse) => {
@@ -154,8 +148,7 @@ const Gallery: React.FC<MainScreenProps> = () => {
   };
 
   const uploadImage = async (image: Asset) => {
-    const isNext = await isNetOn;
-    if (isNext) {
+    if (internetActive) {
       onGalleryUploadPress(image);
     } else {
       uploadToRealm(image);
@@ -203,19 +196,30 @@ const Gallery: React.FC<MainScreenProps> = () => {
       }
     });
   };
+
   useEffect(() => {
     getImageFromFirebaseStorage();
-  }, [isNetOn, !isNetOn]);
+
+    const checkInternetConnection = NetInfo.addEventListener(state => {
+      if (state.isConnected) {
+        if (state.isInternetReachable) {
+          setInternetActive(true);
+        } else {
+          setInternetActive(false);
+        }
+      }
+    });
+
+    return () => {
+      checkInternetConnection();
+    };
+  }, [internetActive]);
 
   const onDeletePress = async () => {
-    // console.log('realmDB', realmDB);
     setProgressModalVisible(false);
-    console.log(selectedObject.isOnline, 'selectedObject', selectedObject.name);
     let name = selectedObject.name;
-    const isNet = await isNetOn;
-    console.log('isNet', isNet);
     if (selectedObject.isOnline) {
-      if (isNet) {
+      if (internetActive) {
         const imageRef = storage().ref(`images/${name}`);
         imageRef
           .delete()
@@ -229,13 +233,12 @@ const Gallery: React.FC<MainScreenProps> = () => {
           .catch(error => {
             console.log('Error deleting image: ====> \n\n', error);
           });
-      } else if (isNet === false) {
-        Alert.alert('no internet');
+      } else if (internetActive === false) {
+        networkWarning();
         SetSelectedObject({});
       }
     }
     if (!selectedObject.isOnline) {
-      console.log('deleteeeee');
       realm.write(() => {
         realm.delete(selectedObject);
       });
@@ -263,7 +266,6 @@ const Gallery: React.FC<MainScreenProps> = () => {
               onPressIn={() => {
                 SetSelectedObject(item);
                 setProgressModalVisible(true);
-                // onDeletePress(item);
               }}>
               <Image
                 style={[styles.crossImage]}
