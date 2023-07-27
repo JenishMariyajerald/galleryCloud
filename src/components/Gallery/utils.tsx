@@ -1,5 +1,5 @@
 import React from 'react';
-import {View, Text, Alert} from 'react-native';
+import {View, Text, Alert, ViewStyle, StyleSheet} from 'react-native';
 import {ProgressView} from '@react-native-community/progress-view';
 import {PhotoQuality} from 'react-native-image-picker';
 import NetInfo from '@react-native-community/netinfo';

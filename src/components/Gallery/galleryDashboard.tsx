@@ -12,6 +12,7 @@ import {
   FlatList,
   SafeAreaView,
   Platform,
+  Alert,
 } from 'react-native';
 
 import {
@@ -40,7 +41,7 @@ const Gallery: React.FC<MainScreenProps> = () => {
   const [isModalVisible, setModalVisible] = useState(false);
   const [inputValue, setInputValue] = useState<string>('');
   const [isSearchFocused, setSearchFocused] = useState<boolean>(false);
-
+  const [selectedObject, SetSelectedObject] = useState<any>({});
   const [progressModalVisible, setProgressModalVisible] =
     useState<boolean>(false);
 
@@ -69,7 +70,9 @@ const Gallery: React.FC<MainScreenProps> = () => {
 
   const isNetOn = React.useMemo(async () => {
     const netInfoState = await NetInfo.fetch();
-    return netInfoState.isConnected;
+    const internet =
+      netInfoState.isConnected && netInfoState.isInternetReachable;
+    return internet;
   }, []);
 
   const openCamera = () => {
@@ -136,9 +139,8 @@ const Gallery: React.FC<MainScreenProps> = () => {
       const storageRef = storage().ref('images').child(filename);
       const task = storageRef.putFile(pathToFile);
       task.on('state_changed', taskSnapshot => {
-        const percentage = Math.round(
-          (100 * taskSnapshot.bytesTransferred) / taskSnapshot.totalBytes,
-        );
+        const percentage =
+          taskSnapshot.bytesTransferred / taskSnapshot.totalBytes;
         setProgress(prevState => ({...prevState, [pathToFile]: percentage}));
       });
       task.then(() => {
@@ -184,9 +186,9 @@ const Gallery: React.FC<MainScreenProps> = () => {
           const storageRef = storage().ref('images').child(i.name);
           const task = storageRef.putFile(pathToFile);
           task.on('state_changed', taskSnapshot => {
-            const percentage = Math.round(
-              (100 * taskSnapshot.bytesTransferred) / taskSnapshot.totalBytes,
-            );
+            const percentage =
+              taskSnapshot.bytesTransferred / taskSnapshot.totalBytes;
+
             setProgress(prevState => ({
               ...prevState,
               [pathToFile]: percentage,
@@ -203,27 +205,41 @@ const Gallery: React.FC<MainScreenProps> = () => {
   };
   useEffect(() => {
     getImageFromFirebaseStorage();
-  }, [isNetOn]);
-  const onDeletePress = async (realmDB: any) => {
-    let name = realmDB.name;
+  }, [isNetOn, !isNetOn]);
+
+  const onDeletePress = async () => {
+    // console.log('realmDB', realmDB);
+    setProgressModalVisible(false);
+    console.log(selectedObject.isOnline, 'selectedObject', selectedObject.name);
+    let name = selectedObject.name;
     const isNet = await isNetOn;
-    if (isNet) {
+    console.log('isNet', isNet);
+    if (selectedObject.isOnline) {
+      if (isNet) {
+        const imageRef = storage().ref(`images/${name}`);
+        imageRef
+          .delete()
+          .then(() => {
+            realm.write(() => {
+              realm.delete(selectedObject);
+            });
+            SetSelectedObject({});
+            console.log('DELETED IN FIREBASE ==>');
+          })
+          .catch(error => {
+            console.log('Error deleting image: ====> \n\n', error);
+          });
+      } else if (isNet === false) {
+        Alert.alert('no internet');
+        SetSelectedObject({});
+      }
+    }
+    if (!selectedObject.isOnline) {
+      console.log('deleteeeee');
       realm.write(() => {
-        realm.delete(realmDB);
+        realm.delete(selectedObject);
       });
-      const imageRef = storage().ref(`images/${name}`);
-      imageRef
-        .delete()
-        .then(() => {
-          console.log('DELETED IN FIREBASE ==>');
-        })
-        .catch(error => {
-          console.log('Error deleting image: ====> \n\n', error);
-        });
-    } else {
-      realm.write(() => {
-        realm.delete(realmDB);
-      });
+      SetSelectedObject({});
     }
   };
   const renderItem = ({item}: {item: any}) => {
@@ -235,8 +251,8 @@ const Gallery: React.FC<MainScreenProps> = () => {
             uri: item.url,
           }}
         />
-        {progress[item.url] != undefined && progress[item.url] !== 100 && (
-          <Text>Uploaded {progress[item.url]}%</Text>
+        {progress[item.url] !== undefined && progress[item.url] !== 1 && (
+          <ProgressBar uploadProgress={progress[item.url]} />
         )}
 
         <Text>{item.isOnline ? 'Online' : 'Offline'}</Text>
@@ -245,7 +261,9 @@ const Gallery: React.FC<MainScreenProps> = () => {
           <View style={styles.crossMark}>
             <TouchableOpacity
               onPressIn={() => {
-                onDeletePress(item);
+                SetSelectedObject(item);
+                setProgressModalVisible(true);
+                // onDeletePress(item);
               }}>
               <Image
                 style={[styles.crossImage]}
@@ -313,6 +331,9 @@ const Gallery: React.FC<MainScreenProps> = () => {
         visible={progressModalVisible}
         onClose={() => setProgressModalVisible(false)}
         onCancelSelect={() => setProgressModalVisible(false)}
+        onDelete={() => {
+          onDeletePress();
+        }}
       />
     </SafeAreaView>
   );
